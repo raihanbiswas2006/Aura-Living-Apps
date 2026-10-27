@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 import '../../domain/entities/address.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/i_auth_repository.dart';
@@ -75,6 +75,22 @@ class MockAuthRepository implements IAuthRepository {
       phone: '+8801712345678',
       isGuest: false,
       addresses: _currentUser?.addresses ?? [],
+    );
+    await _storage.saveUserRaw(_currentUser!.toJson());
+    return _currentUser!;
+  }
+
+  @override
+  Future<UserProfile> signInWithGoogle() async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    _currentUser = const UserProfile(
+      id: 'google-usr-001',
+      name: 'Raihan Biswas',
+      email: 'raihanbiswas2006@gmail.com',
+      phone: '+8801712345678',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+      isGuest: false,
+      addresses: [],
     );
     await _storage.saveUserRaw(_currentUser!.toJson());
     return _currentUser!;

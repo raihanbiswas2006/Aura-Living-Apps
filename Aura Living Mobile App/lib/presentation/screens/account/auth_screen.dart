@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_typography.dart';
@@ -21,7 +21,7 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   bool _isSignUp = false;
-  bool _isPhoneMode = true; // Default to Bangladesh Phone Auth (+880)
+  bool _isPhoneMode = false; // Default to Email & Password Auth
   bool _otpSent = false;
   final _formKey = GlobalKey<FormState>();
 
@@ -39,6 +39,14 @@ class _AuthScreenState extends State<AuthScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _fillDemo(String email, String password) {
+    setState(() {
+      _isPhoneMode = false;
+      _emailController.text = email;
+      _passwordController.text = password;
+    });
   }
 
   void _submit() {
@@ -249,6 +257,59 @@ class _AuthScreenState extends State<AuthScreen> {
                         label: _isSignUp ? 'Create Customer Account' : 'Sign In',
                         isLoading: isLoading,
                         onPressed: _submit,
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.g_mobiledata, size: 28, color: Colors.blue),
+                        label: const Text('Continue with Google', style: TextStyle(fontWeight: FontWeight.w600)),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          foregroundColor: AppColors.textPrimary,
+                          side: const BorderSide(color: AppColors.border),
+                        ),
+                        onPressed: isLoading ? null : () => context.read<AuthCubit>().signInWithGoogle(),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Quick-Fill Demo Personas
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Pre-Seeded Demo Accounts (1-Tap Fill):',
+                              style: AppTypography.bodySmall.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ActionChip(
+                                  label: const Text('Arif (Customer)', style: TextStyle(fontSize: 11)),
+                                  onPressed: () => _fillDemo('arif@demo.aura', 'AuraLiving2026!'),
+                                ),
+                                ActionChip(
+                                  label: const Text('Nusrat (Customer)', style: TextStyle(fontSize: 11)),
+                                  onPressed: () => _fillDemo('nusrat@demo.aura', 'AuraLiving2026!'),
+                                ),
+                                ActionChip(
+                                  label: const Text('Admin', style: TextStyle(fontSize: 11)),
+                                  onPressed: () => _fillDemo('admin@auraliving.com', 'password123'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 14),
 

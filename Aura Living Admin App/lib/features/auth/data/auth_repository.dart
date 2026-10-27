@@ -1,3 +1,5 @@
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
@@ -9,6 +11,7 @@ abstract class AuthRepository {
   Future<AdminUser?> getCurrentUser();
   Future<AdminUser> signInWithEmailPassword(String email, String password);
   Future<AdminUser> signIn(String email, String password);
+  Future<AdminUser> signInWithGoogle();
   Future<void> signOut();
   Stream<AdminUser?> authStateChanges();
 }
@@ -243,6 +246,60 @@ class MockAuthRepository implements AuthRepository {
 
   @override
   Future<AdminUser> signIn(String email, String password) => signInWithEmailPassword(email, password);
+
+  @override
+  Future<AdminUser> signInWithGoogle() async {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        UserCredential userCredential;
+        if (kIsWeb) {
+          final googleProvider = GoogleAuthProvider();
+          userCredential = await FirebaseAuth.instance.signInWithPopup(googleProvider);
+        } else {
+          final googleUser = await GoogleSignIn.instance.authenticate();
+          final googleAuth = googleUser.authentication;
+          final credential = GoogleAuthProvider.credential(
+            idToken: googleAuth.idToken,
+          );
+          userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+        }
+
+        final fbUser = userCredential.user;
+        if (fbUser != null) {
+          final email = fbUser.email?.toLowerCase() ?? '';
+          final account = _mockAccounts.firstWhere(
+            (acc) => (acc['email'] as String).toLowerCase() == email,
+            orElse: () => <String, dynamic>{},
+          );
+
+          AdminRole resolvedRole = AdminRole.superAdmin;
+          if (account.isNotEmpty && account['user'] != null) {
+            resolvedRole = (account['user'] as AdminUser).role;
+          }
+
+          final adminUser = AdminUser(
+            id: fbUser.uid,
+            name: fbUser.displayName ?? 'Administrator',
+            email: fbUser.email ?? 'admin@auraliving.com',
+            role: resolvedRole,
+            avatarUrl: fbUser.photoURL ?? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+            lastLoginAt: DateTime.now(),
+          );
+
+          _currentUser = adminUser;
+          await _persistUser(adminUser);
+          _authStreamController.add(_currentUser);
+          return adminUser;
+        }
+      }
+    } catch (_) {}
+
+    final adminUser = _mockAccounts[0]['user'] as AdminUser;
+    _currentUser = adminUser;
+    await _persistUser(adminUser);
+    _authStreamController.add(_currentUser);
+    return adminUser;
+  }
 
   @override
   Future<void> signOut() async {

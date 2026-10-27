@@ -1,3 +1,5 @@
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
@@ -284,6 +286,78 @@ class FirebaseAuthRepository implements IAuthRepository {
       id: 'usr-${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       email: email.trim(),
+      isGuest: false,
+      addresses: [],
+    );
+    await _storage.saveUserRaw(_currentUser!.toJson());
+    return _currentUser!;
+  }
+
+  @override
+  Future<UserProfile> signInWithGoogle() async {
+    final auth = _firebaseAuth;
+    if (auth != null) {
+      try {
+        fb_auth.UserCredential userCredential;
+        if (kIsWeb) {
+          final googleProvider = fb_auth.GoogleAuthProvider();
+          userCredential = await auth.signInWithPopup(googleProvider);
+        } else {
+          final googleUser = await GoogleSignIn.instance.authenticate();
+          final googleAuth = googleUser.authentication;
+          final credential = fb_auth.GoogleAuthProvider.credential(
+            idToken: googleAuth.idToken,
+          );
+          userCredential = await auth.signInWithCredential(credential);
+        }
+
+        final firebaseUser = userCredential.user;
+        if (firebaseUser == null) {
+          throw Exception('Google Sign-In failed: User could not be obtained.');
+        }
+
+        _currentUser = UserProfile(
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName ?? 'Google User',
+          email: firebaseUser.email ?? '',
+          phone: firebaseUser.phoneNumber ?? '+8801712345678',
+          avatarUrl: firebaseUser.photoURL,
+          isGuest: false,
+          addresses: [],
+        );
+
+        final db = _firestore;
+        if (db != null) {
+          try {
+            final userDoc = await db.collection('users').doc(firebaseUser.uid).get();
+            if (userDoc.exists && userDoc.data() != null) {
+              _currentUser = UserProfile.fromJson(userDoc.data()!);
+            } else {
+              await db.collection('users').doc(firebaseUser.uid).set({
+                ..._currentUser!.toJson(),
+                'role': 'customer',
+                'createdAt': FieldValue.serverTimestamp(),
+              });
+            }
+          } catch (_) {}
+        }
+
+        await _storage.saveUserRaw(_currentUser!.toJson());
+        return _currentUser!;
+      } catch (e) {
+        if (e is fb_auth.FirebaseAuthException) {
+          throw Exception(_mapAuthError(e));
+        }
+      }
+    }
+
+    // Offline / Demo fallback
+    _currentUser = const UserProfile(
+      id: 'usr-google-demo',
+      email: 'raihanbiswas2006@gmail.com',
+      name: 'Raihan Biswas',
+      phone: '+8801712345678',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
       isGuest: false,
       addresses: [],
     );

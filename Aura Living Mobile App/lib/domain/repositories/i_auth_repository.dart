@@ -1,10 +1,11 @@
-import '../entities/address.dart';
+﻿import '../entities/address.dart';
 import '../entities/user_profile.dart';
 
 abstract class IAuthRepository {
   Future<UserProfile?> getCurrentUser();
   Future<UserProfile> signIn(String email, String password);
   Future<UserProfile> register(String name, String email, String password);
+  Future<UserProfile> signInWithGoogle();
   Future<UserProfile> signInWithPhone(String phone, String otp);
   Future<UserProfile> continueAsGuest();
   Future<void> signOut();

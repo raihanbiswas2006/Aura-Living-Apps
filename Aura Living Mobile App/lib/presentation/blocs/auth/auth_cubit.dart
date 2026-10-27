@@ -1,4 +1,4 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
+﻿import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../domain/entities/address.dart';
 import '../../../domain/entities/user_profile.dart';
 import '../../../domain/repositories/i_auth_repository.dart';
@@ -62,6 +62,16 @@ class AuthCubit extends Cubit<AuthState> {
     emit(AuthLoading());
     try {
       final user = await _authRepository.register(name, email, password);
+      emit(Authenticated(user));
+    } catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> signInWithGoogle() async {
+    emit(AuthLoading());
+    try {
+      final user = await _authRepository.signInWithGoogle();
       emit(Authenticated(user));
     } catch (e) {
       emit(AuthError(e.toString()));

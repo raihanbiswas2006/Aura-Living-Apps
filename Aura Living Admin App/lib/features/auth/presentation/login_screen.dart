@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
@@ -216,6 +216,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             text: 'Sign In to Operations',
                             isLoading: authState.isLoading,
                             onPressed: _submit,
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.g_mobiledata, size: 24, color: AppColors.primaryOlive),
+                            label: const Text('Sign in with Google'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(44),
+                              foregroundColor: AppColors.textPrimary,
+                              side: const BorderSide(color: AppColors.border),
+                            ),
+                            onPressed: authState.isLoading
+                                ? null
+                                : () async {
+                                    final success = await ref
+                                        .read(authControllerProvider.notifier)
+                                        .signInWithGoogle();
+                                    if (success && mounted) {
+                                      context.go('/dashboard');
+                                    }
+                                  },
                           ),
                         ],
                       ),
