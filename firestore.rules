@@ -1,15 +1,10 @@
 rules_version = '2';
 
-// ===============================================================
-// Aura Living - Production Hardened Cloud Firestore Security Rules
-// Enforces Zero Open Access, Strict RBAC, Input Limits & Ownership
-// ===============================================================
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Authentication & RBAC Helper Functions
+    // Authentication & Authorization Helper Functions
     // ===============================================================
 
     function isAuthenticated() {
@@ -20,143 +15,89 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Role-based Access Control (RBAC): Admin Claim or Stored Staff Role
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.admin == true ||
-        request.auth.token.role == 'admin' ||
-        request.auth.token.role == 'superAdmin' ||
+        (request.auth.token.role == 'admin' || request.auth.token.admin == true) ||
+        (request.auth.token.email in ['admin@auraliving.com', 'admin@demo.aura', 'raihanbiswas2006@gmail.com', 'manager@auraliving.com', 'staff@auraliving.com']) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superAdmin', 'storeManager', 'staff'])
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superAdmin', 'storeManager', 'inventoryStaff'])
       );
     }
 
-    function isValidEmail(email) {
-      return email is string &&
-             email.size() <= 150 &&
-             email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
-    }
-
     // ===============================================================
-    // Payload & Schema Validators (Anti-Injection & Size Boundary)
+    // Collections
     // ===============================================================
 
-    function isValidUser(data) {
-      return data.id is string &&
-             data.id == request.auth.uid &&
-             data.email is string &&
-             isValidEmail(data.email) &&
-             data.name is string &&
-             data.name.size() > 0 &&
-             data.name.size() <= 100;
-    }
-
-    function isValidOrder(data) {
-      return data.id is string &&
-             data.id.size() <= 100 &&
-             data.userId is string &&
-             data.userId.size() > 0 &&
-             data.userId.size() <= 128 &&
-             data.items is list &&
-             data.items.size() > 0 &&
-             data.items.size() <= 100 &&
-             ((data.total is number && data.total >= 0) || (data.totalAmount is number && data.totalAmount >= 0));
-    }
-
-    function isValidReview(data) {
-      return data.id is string &&
-             data.productId is string &&
-             data.userId is string &&
-             data.userId == request.auth.uid &&
-             data.userName is string &&
-             data.userName.size() > 0 &&
-             data.userName.size() <= 100 &&
-             data.rating is number &&
-             data.rating >= 1 &&
-             data.rating <= 5 &&
-             data.comment is string &&
-             data.comment.size() > 0 &&
-             data.comment.size() <= 2000;
-    }
-
-    // ===============================================================
-    // Collection Security Rules
-    // ===============================================================
-
-    // Users Collection: Strict Ownership & Protected Admin Role Elevation
+    // Users Collection
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() &&
-                    isOwner(userId) &&
-                    isValidUser(request.resource.data) &&
-                    (!('role' in request.resource.data) || request.resource.data.role == 'customer' || isAdmin());
-      allow update: if isAuthenticated() &&
-                    isValidUser(request.resource.data) &&
-                    ((isOwner(userId) && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)) || isAdmin());
+      allow create: if isOwner(userId) && (!('role' in request.resource.data) || request.resource.data.role == 'customer' || isAdmin());
+      allow update: if (isOwner(userId) && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)) || isAdmin();
       allow delete: if isAdmin();
     }
 
-    // Products Collection: Public Read for Catalog, Write Restricted to Admins
+    // Products Collection (Public Read, Admin Write)
     match /products/{productId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // Categories Collection: Public Read, Write Restricted to Admins
+    // Categories Collection (Public Read, Admin Write)
     match /categories/{categoryId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // Orders Collection: STRICT RBAC & Customer Ownership (NO OPEN READS)
-    match /orders/{orderId} {
-      // Zero unauthenticated access: Customer can only view their own orders, Admins view all
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-
-      // Customers can create orders tied solely to their own authenticated UID
-      allow create: if isAuthenticated() &&
-                    (request.resource.data.userId == request.auth.uid || isAdmin()) &&
-                    isValidOrder(request.resource.data);
-
-      // Customer can only cancel their own pending order; Admins can update status
-      allow update: if isAdmin() || (
-        isAuthenticated() &&
-        resource.data.userId == request.auth.uid &&
-        request.resource.data.userId == resource.data.userId &&
-        request.resource.data.status in ['cancelled', 'pending'] &&
-        resource.data.status == 'pending'
-      );
-
-      // Orders cannot be deleted by customers
-      allow delete: if isAdmin();
-    }
-
-    // Reviews Collection: Public Read, Verified Customer Writes
-    match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if isAuthenticated() &&
-                    request.resource.data.userId == request.auth.uid &&
-                    isValidReview(request.resource.data);
-      allow update: if isAuthenticated() &&
-                    (resource.data.userId == request.auth.uid || isAdmin()) &&
-                    isValidReview(request.resource.data) &&
-                    request.resource.data.userId == resource.data.userId;
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // Coupons Collection: Authenticated Customers Read, Only Admins Manage
-    match /coupons/{couponCode} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Settings Collection: Public Read, Only Admins Manage
-    match /settings/{settingId} {
+    // Store Settings & Banners (Public Read, Admin Write)
+    match /store_settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Default Deny Rule for any unspecified routes/collections
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Real-Time Carts (Owner Only, Sync across Web & Mobile)
+    match /carts/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    // Real-Time Wishlists (Owner Only, Sync across Web & Mobile)
+    match /wishlists/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    // Orders Collection (Owner Read/Create, Admin Full Control)
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (
+        isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.orderStatus == 'cancelled' &&
+        resource.data.orderStatus == 'pending'
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Product Reviews (Public Read, Verified Owner Create)
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Coupons & Promotions
+    match /coupons/{couponId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Default Fallback: Block all unauthorized paths
     match /{document=**} {
       allow read, write: if false;
     }
